@@ -1,42 +1,42 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
+# Exit immediately if any command fails
 set -e
 
 echo "=================================================="
-echo " Starting Spotify Connect Receiver Setup"
+echo " Starting Spotify Connect Receiver Setup (Snap Mode)"
 echo "=================================================="
 
-# 1. Update system and install system dependencies
-echo "[*] Installing audio and bluetooth packages..."
+# 1. Install System Dependencies
+echo "[*] Installing core utilities and audio tools..."
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y pulseaudio pulseaudio-module-bluetooth bluez bluez-tools alsa-utils curl wget
+sudo apt install -y snapd bluez bluez-tools alsa-utils curl
 
-# 2. Install Rust and compile Librespot natively
-echo "[*] Installing Rust and compiling Librespot from source..."
+# Ensure snapd service is active (required on bare Debian)
+sudo systemctl enable --now snapd.service
+# Create the necessary symlink for classic snap support on Debian
+sudo ln -s /var/lib/snapd/snap /snap || true
 
-# Install the Rust toolchain non-interactively
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source "$HOME/.cargo/env"
+echo "[*] Waiting for snapd to fully initialize..."
+sleep 5
 
-# Add compiler essentials required for building native dependencies
-sudo apt install -y build-essential libasound2-dev pkg-config libpulse-dev
+# 2. Install Librespot via Snap
+echo "[*] Installing librespot-dev from snap..."
+sudo snap install librespot-dev
 
-# Use Cargo to fetch, build, and install librespot globally with pulseaudio support
-cargo install librespot --features "pulseaudio-backend"
+# Ensure our environment knows where snap binaries live
+export PATH="$PATH:/snap/bin"
 
-# Move the compiled binary to your global system bin path
-sudo cp "$HOME/.cargo/bin/librespot" /usr/local/bin/
-
-# 3. Create the Systemd service to manage Librespot background run
-echo "[*] Creating background service..."
+# 3. Create the Systemd service to run Librespot in the background
+echo "[*] Creating background service using Rodio backend..."
 sudo bash -c 'cat << EOF > /etc/systemd/system/librespot.service
 [Unit]
-Description=Librespot Spotify Connect Receiver
-After=network.target sound.target
+Description=Librespot Spotify Connect Receiver (Snap)
+After=network.target sound.target snapd.service
 
 [Service]
-ExecStart=/usr/local/bin/librespot --name "PiSpeaker" --backend pulseaudio
+# We point to the explicit snap binary location and use the working rodio backend
+ExecStart=/snap/bin/librespot-dev.librespot --name "PiSpeaker" --backend rodio
 Restart=always
 RestartSec=10
 
@@ -44,20 +44,20 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF'
 
-# 4. Enable PulseAudio linger for headless environments
-echo "[*] Enabling user lingering for seamless headless audio..."
+# 4. Fix headless audio permissions
+echo "[*] Enabling user session lingering for headless playback..."
 sudo loginctl enable-linger $USER
 
-# 5. Reload services
+# 5. Reload systemd and spin up the service
+echo "[*] Starting the Spotify Connect service..."
 sudo systemctl daemon-reload
 sudo systemctl enable librespot
+sudo systemctl start librespot
 
 echo "=================================================="
 echo " Setup Complete!"
-echo " Next Steps to Demo:"
-echo " 1. Pair your speaker via 'bluetoothctl'"
-echo " 2. Run 'sudo systemctl start librespot'"
-echo " 3. Open Spotify on your phone and select 'PiSpeaker'"
 echo "=================================================="
-
-    v c cv  cv  
+echo "Your receiver is running in the background."
+echo "Simply pair your Bluetooth speaker via bluetoothctl,"
+echo "and 'PiSpeaker' will stay alive and ready on Spotify!"
+echo "=================================================="
