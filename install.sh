@@ -12,23 +12,21 @@ echo "[*] Installing audio and bluetooth packages..."
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y pulseaudio pulseaudio-module-bluetooth bluez bluez-tools alsa-utils curl wget
 
-# 2. Download and install the official Librespot binary
-echo "[*] Fetching latest official Librespot binary..."
-# Detect architecture (handles your VM vs the future Pi Zero 2 W which is aarch64/arm64)
-ARCH=$(uname -m)
-if [ "$ARCH" = "x86_64" ]; then
-    URL="https://github.com/librespot-org/librespot/releases/latest/download/librespot-linux-amd64.tar.gz"
-elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-    URL="https://github.com/librespot-org/librespot/releases/latest/download/librespot-linux-arm64.tar.gz"
-else
-    URL="https://github.com/librespot-org/librespot/releases/latest/download/librespot-linux-armhf.tar.gz"
-fi
+# 2. Install Rust and compile Librespot natively
+echo "[*] Installing Rust and compiling Librespot from source..."
 
-wget -O librespot.tar.gz "$URL"
-tar -xvzf librespot.tar.gz
-chmod +x librespot
-sudo mv librespot /usr/local/bin/
-rm librespot.tar.gz
+# Install the Rust toolchain non-interactively
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+# Add compiler essentials required for building native dependencies
+sudo apt install -y build-essential libasound2-dev pkg-config libpulse-dev
+
+# Use Cargo to fetch, build, and install librespot globally with pulseaudio support
+cargo install librespot --features "pulseaudio-backend"
+
+# Move the compiled binary to your global system bin path
+sudo cp "$HOME/.cargo/bin/librespot" /usr/local/bin/
 
 # 3. Create the Systemd service to manage Librespot background run
 echo "[*] Creating background service..."
@@ -61,3 +59,5 @@ echo " 1. Pair your speaker via 'bluetoothctl'"
 echo " 2. Run 'sudo systemctl start librespot'"
 echo " 3. Open Spotify on your phone and select 'PiSpeaker'"
 echo "=================================================="
+
+    v c cv  cv  
